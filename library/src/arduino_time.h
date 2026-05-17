@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-void delay_ms(uint16_t ms);
+void delay_ms(uint16_t ms); // Fungsi nya untuk menunda waktu eksekusi kode 
 
 #ifdef __cplusplus
 }

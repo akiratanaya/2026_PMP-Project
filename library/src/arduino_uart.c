@@ -5,7 +5,6 @@
 void uart_init(uint32_t baud_rate)
 {
     uint16_t ubrr = (uint16_t)((F_CPU / (16UL * baud_rate)) - 1UL);
-
     UBRR0H = (uint8_t)(ubrr >> 8);
     UBRR0L = (uint8_t)ubrr;
     UCSR0A = 0U;
@@ -27,6 +26,17 @@ void uart_write_string(const char *text)
     while (*text != '\0')
     {
         uart_write_char(*text);
+        text++;
+    }
+}
+
+#include <avr/pgmspace.h>
+void uart_write_string_P(const char *text)
+{
+    char c;
+    while ((c = (char)pgm_read_byte(text)) != '\0')
+    {
+        uart_write_char(c);
         text++;
     }
 }
