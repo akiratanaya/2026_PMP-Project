@@ -1,14 +1,14 @@
 # Arduino Inventory Management System
 
-Proyek ini adalah sistem manajemen inventaris *(inventory management)* berskala kecil yang berjalan secara murni menggunakan arsitektur bahasa **C** pada **Arduino UNO (ATmega328P)**. 
-Sistem ini menggunakan fitur penyimpanan persisten pada **EEPROM** untuk mencegah data hilang saat Arduino dimatikan. Selain itu, proyek ini menerapkan konsep komunikasi **Master-Slave (I2C)** di mana Arduino Slave bertindak sebagai sistem Redundancy (memori cadangan / *mirror*) dari EEPROM Master.
+Proyek ini adalah sistem manajemen inventaris *(inventory management)* berskala kecil yang berjalan secara murni menggunakan arsitektur bahasa C pada Arduino UNO (ATmega328P). 
+Sistem ini menggunakan fitur penyimpanan persisten pada EEPROM untuk mencegah data hilang saat Arduino dimatikan. Selain itu, proyek ini menerapkan konsep komunikasi Master-Slave (I2C) di mana Arduino Slave bertindak sebagai memori tambahan inventaris. Selain itu, program ini menggunakan LUT untuk membuat penggunaan memori untuk menyimpan data jadi lebih efisien.
 
 ---
 
 
 ## Prasyarat Sistem & Tools (Requirements)
 
-Sebelum dapat mengompilasi dan menjalankan program ini, pastikan Anda telah menginstal beberapa *tools* penting di komputer Linux Anda. Anda bisa menginstalnya melalui terminal menggunakan *package manager* bawaan (seperti `apt` untuk Ubuntu/Debian):
+Sebelum dapat mengompilasi dan menjalankan program ini, pastikan Anda telah menginstal beberapa *tools* penting di komputer Linux. Penginstalan dapat dilakukan melalui terminal menggunakan *package manager* bawaan (seperti `apt` untuk Ubuntu/Debian), untuk windows dapat menggunakan WSL saja:
 
 ```bash
 sudo apt update
@@ -47,5 +47,5 @@ make host_csv
 ./host_csv import /dev/ttyUSB0 data/import.csv
 
 # Untuk Export dari Arduino ke CSV
-./host_csv export /dev/ttyUSB0 data/export_hasil.csv
+./host_csv export /dev/ttyUSB0 data/export.csv
 ```
