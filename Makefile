@@ -15,23 +15,26 @@ CFLAGS = -DF_CPU=$(F_CPU) -mmcu=$(MCU) -Os -Ilibrary/src -DBOARD_UNO_R3
 TARGET = program
 
 ifeq ($(ROLE),master)
+CFLAGS += -DROLE_MASTER
 SOURCES = \
 	library/src/arduino_board.c \
 	library/src/arduino_gpio.c \
 	library/src/arduino_adc.c \
-	library/src/arduino_pwm.c \
 	library/src/arduino_uart.c \
 	library/src/arduino_time.c \
 	library/src/arduino_i2c.c \
+	library/src/dict.c \
 	library/src/inventory.c \
 	library/src/serial_cmd.c \
 	src/main.c
 else ifeq ($(ROLE),slave)
+CFLAGS += -DROLE_SLAVE
 SOURCES = \
 	library/src/arduino_board.c \
 	library/src/arduino_gpio.c \
 	library/src/arduino_time.c \
 	library/src/arduino_i2c.c \
+	library/src/inventory.c \
 	src/i2c_slave_main.c
 else
 $(error Unknown ROLE value: $(ROLE))
