@@ -4,7 +4,7 @@
 
 void delay_ms(uint16_t ms)
 {
-    while (ms > 0U)
+    while (ms > 0)
     // 0u disini gunanya untuk memastikan bahwa 0 adalah unsigned integer
     {
         _delay_ms(1.0);

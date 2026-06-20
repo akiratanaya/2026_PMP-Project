@@ -5,21 +5,25 @@
 #include <util/twi.h>
 
 static uint8_t *i2c_slave_memory = 0;
-static uint16_t i2c_slave_memory_size = 0U;
-static uint16_t i2c_slave_index = 0U;
-static uint8_t i2c_slave_offset_bytes = 0U;
-static uint8_t i2c_slave_index_valid = 0U;
-static volatile uint8_t i2c_slave_dirty = 0U;
+static uint16_t i2c_slave_memory_size = 0;
+static uint16_t i2c_slave_index = 0;
+static uint8_t i2c_slave_offset_bytes = 0;
+static uint8_t i2c_slave_index_valid = 0;
+static volatile uint8_t i2c_slave_dirty = 0;
+
+// SCL = Serial Clock
+// SDA = Serial Data 
 
 static uint8_t i2c_wait_complete(void)
 {
-    uint16_t guard = 60000U;
+    uint16_t guard = 60000;
 
-    while ((TWCR & _BV(TWINT)) == 0U)
+    while ((TWCR & _BV(TWINT)) == 0)
     {
-        if (guard == 0U)
+        if (guard == 0)
         {
-            return I2C_TIMEOUT;
+            return I2C_TIMEOUT; //Kalau dia gak ngirim sinyal beres selama waktu guard
+            //Dia jadi diitung sebagai timeout
         }
         guard--;
     }
@@ -31,12 +35,12 @@ static uint8_t i2c_status_to_error(uint8_t status)
 {
     if (status == TW_MT_SLA_ACK || status == TW_MT_DATA_ACK || status == TW_MR_SLA_ACK || status == TW_MR_DATA_ACK || status == TW_MR_DATA_NACK)
     {
-        return I2C_OK;
+        return I2C_OK; //Acknowldge, ketika data sukses diterima dan siap terima data lain
     }
 
     if (status == TW_MT_SLA_NACK || status == TW_MT_DATA_NACK || status == TW_MR_SLA_NACK)
     {
-        return I2C_NACK;
+        return I2C_NACK; //Not Acknowlede, mungkin salah alamat atau udh beres ngirim
     }
 
     return I2C_ERROR;
@@ -46,12 +50,12 @@ void i2c_master_init(uint32_t scl_hz)
 {
     uint32_t twbr_value;
 
-    if (scl_hz == 0UL)
+    if (scl_hz == 0)
     {
-        scl_hz = 100000UL;
+        scl_hz = 100000UL; //
     }
 
-    TWSR = 0U;
+    TWSR = 0;
     /* Keep SDA/SCL as input with pull-up so the bus has a defined idle high level. */
     DDRC &= (uint8_t)~(_BV(PC4) | _BV(PC5));
     PORTC |= _BV(PC4) | _BV(PC5);
@@ -160,11 +164,11 @@ uint8_t i2c_master_read_nack(uint8_t *data)
 
 void i2c_master_stop(void)
 {
-    uint16_t guard = 60000U;
+    uint16_t guard = 60000;
     TWCR = _BV(TWINT) | _BV(TWEN) | _BV(TWSTO);
-    while ((TWCR & _BV(TWSTO)) != 0U)
+    while ((TWCR & _BV(TWSTO)) != 0)
     {
-        if (guard == 0U)
+        if (guard == 0)
         {
             break;
         }
@@ -177,12 +181,12 @@ uint8_t i2c_master_mem_write(uint8_t slave_address, uint16_t offset, const uint8
     uint8_t status;
     uint8_t i;
 
-    if ((data == 0) && (length > 0U))
+    if ((data == 0) && (length > 0))
     {
         return I2C_ERROR;
     }
 
-    status = i2c_master_start((uint8_t)((slave_address << 1) | 0U));
+    status = i2c_master_start((uint8_t)((slave_address << 1) | 0));
     if (status != I2C_OK)
     {
         i2c_master_stop();
@@ -196,14 +200,14 @@ uint8_t i2c_master_mem_write(uint8_t slave_address, uint16_t offset, const uint8
         return status;
     }
 
-    status = i2c_master_write((uint8_t)(offset & 0x00FFU));
+    status = i2c_master_write((uint8_t)(offset & 0x00FF));
     if (status != I2C_OK)
     {
         i2c_master_stop();
         return status;
     }
 
-    for (i = 0U; i < length; ++i)
+    for (i = 0; i < length; ++i)
     {
         status = i2c_master_write(data[i]);
         if (status != I2C_OK)
@@ -222,12 +226,12 @@ uint8_t i2c_master_mem_read(uint8_t slave_address, uint16_t offset, uint8_t *dat
     uint8_t status;
     uint8_t i;
 
-    if ((data == 0) || (length == 0U))
+    if ((data == 0) || (length == 0))
     {
         return I2C_ERROR;
     }
 
-    status = i2c_master_start((uint8_t)((slave_address << 1) | 0U));
+    status = i2c_master_start((uint8_t)((slave_address << 1) | 0));
     if (status != I2C_OK)
     {
         i2c_master_stop();
@@ -241,21 +245,21 @@ uint8_t i2c_master_mem_read(uint8_t slave_address, uint16_t offset, uint8_t *dat
         return status;
     }
 
-    status = i2c_master_write((uint8_t)(offset & 0x00FFU));
+    status = i2c_master_write((uint8_t)(offset & 0x00FF));
     if (status != I2C_OK)
     {
         i2c_master_stop();
         return status;
     }
 
-    status = i2c_master_start((uint8_t)((slave_address << 1) | 1U));
+    status = i2c_master_start((uint8_t)((slave_address << 1) | 1));
     if (status != I2C_OK)
     {
         i2c_master_stop();
         return status;
     }
 
-    for (i = 0U; i < (uint8_t)(length - 1U); ++i)
+    for (i = 0; i < (uint8_t)(length - 1); ++i)
     {
         status = i2c_master_read_ack(&data[i]);
         if (status != I2C_OK)
@@ -265,7 +269,7 @@ uint8_t i2c_master_mem_read(uint8_t slave_address, uint16_t offset, uint8_t *dat
         }
     }
 
-    status = i2c_master_read_nack(&data[length - 1U]);
+    status = i2c_master_read_nack(&data[length - 1]);
     i2c_master_stop();
     return status;
 }
@@ -274,10 +278,10 @@ void i2c_slave_init(uint8_t slave_address, uint8_t *memory, uint16_t memory_size
 {
     i2c_slave_memory = memory;
     i2c_slave_memory_size = memory_size;
-    i2c_slave_index = 0U;
-    i2c_slave_offset_bytes = 0U;
-    i2c_slave_index_valid = 0U;
-    i2c_slave_dirty = 0U;
+    i2c_slave_index = 0;
+    i2c_slave_offset_bytes = 0;
+    i2c_slave_index_valid = 0;
+    i2c_slave_dirty = 0;
 
     /* Keep SDA/SCL as input with pull-up so the bus has a defined idle high level. */
     DDRC &= (uint8_t)~(_BV(PC4) | _BV(PC5));
@@ -295,7 +299,7 @@ uint8_t i2c_slave_take_dirty_flag(void)
 
     cli();
     dirty = i2c_slave_dirty;
-    i2c_slave_dirty = 0U;
+    i2c_slave_dirty = 0;
     sei();
 
     return dirty;
@@ -309,32 +313,32 @@ ISR(TWI_vect)
         case TW_SR_ARB_LOST_SLA_ACK:
         case TW_SR_GCALL_ACK:
         case TW_SR_ARB_LOST_GCALL_ACK:
-            i2c_slave_offset_bytes = 0U;
-            i2c_slave_index_valid = 0U;
+            i2c_slave_offset_bytes = 0;
+            i2c_slave_index_valid = 0;
             break;
 
         case TW_SR_DATA_ACK:
         case TW_SR_GCALL_DATA_ACK:
-            if (i2c_slave_offset_bytes == 0U)
+            if (i2c_slave_offset_bytes == 0)
             {
                 i2c_slave_index = (uint16_t)TWDR << 8;
-                i2c_slave_offset_bytes = 1U;
+                i2c_slave_offset_bytes = 1;
             }
-            else if (i2c_slave_offset_bytes == 1U)
+            else if (i2c_slave_offset_bytes == 1)
             {
                 i2c_slave_index |= (uint16_t)TWDR;
                 if (i2c_slave_index >= i2c_slave_memory_size)
                 {
-                    i2c_slave_index = 0U;
+                    i2c_slave_index = 0;
                 }
-                i2c_slave_offset_bytes = 2U;
-                i2c_slave_index_valid = 1U;
+                i2c_slave_offset_bytes = 2;
+                i2c_slave_index_valid = 1;
             }
             else if ((i2c_slave_memory != 0) && (i2c_slave_index < i2c_slave_memory_size))
             {
                 i2c_slave_memory[i2c_slave_index] = TWDR;
-                i2c_slave_dirty = 1U;
-                if (i2c_slave_index + 1U < i2c_slave_memory_size)
+                i2c_slave_dirty = 1;
+                if (i2c_slave_index + 1 < i2c_slave_memory_size)
                 {
                     i2c_slave_index++;
                 }
@@ -343,32 +347,32 @@ ISR(TWI_vect)
 
         case TW_ST_SLA_ACK:
         case TW_ST_ARB_LOST_SLA_ACK:
-            if ((i2c_slave_memory != 0) && (i2c_slave_index_valid != 0U) && (i2c_slave_index < i2c_slave_memory_size))
+            if ((i2c_slave_memory != 0) && (i2c_slave_index_valid != 0) && (i2c_slave_index < i2c_slave_memory_size))
             {
                 TWDR = i2c_slave_memory[i2c_slave_index];
-                if (i2c_slave_index + 1U < i2c_slave_memory_size)
+                if (i2c_slave_index + 1 < i2c_slave_memory_size)
                 {
                     i2c_slave_index++;
                 }
             }
             else
             {
-                TWDR = 0xFFU;
+                TWDR = 0xFF;
             }
             break;
 
         case TW_ST_DATA_ACK:
-            if ((i2c_slave_memory != 0) && (i2c_slave_index_valid != 0U) && (i2c_slave_index < i2c_slave_memory_size))
+            if ((i2c_slave_memory != 0) && (i2c_slave_index_valid != 0) && (i2c_slave_index < i2c_slave_memory_size))
             {
                 TWDR = i2c_slave_memory[i2c_slave_index];
-                if (i2c_slave_index + 1U < i2c_slave_memory_size)
+                if (i2c_slave_index + 1 < i2c_slave_memory_size)
                 {
                     i2c_slave_index++;
                 }
             }
             else
             {
-                TWDR = 0xFFU;
+                TWDR = 0xFF;
             }
             break;
 

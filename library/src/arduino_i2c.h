@@ -7,10 +7,10 @@
 extern "C" {
 #endif
 
-#define I2C_OK 0U
-#define I2C_ERROR 1U
-#define I2C_NACK 2U
-#define I2C_TIMEOUT 3U
+#define I2C_OK 0
+#define I2C_ERROR 1
+#define I2C_NACK 2
+#define I2C_TIMEOUT 3
 
 void i2c_master_init(uint32_t scl_hz);
 uint8_t i2c_master_start(uint8_t address_rw);

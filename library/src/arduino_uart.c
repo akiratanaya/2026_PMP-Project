@@ -5,16 +5,18 @@
 void uart_init(uint32_t baud_rate)
 {
     uint16_t ubrr = (uint16_t)((F_CPU / (16UL * baud_rate)) - 1UL);
+    // UBRR= Usart(Universal synchrnouse Ansynchronous Rec-Trans) baud rate register berukuran 8 bit
+    // FCPU makro yang berisikan<
     UBRR0H = (uint8_t)(ubrr >> 8);
     UBRR0L = (uint8_t)ubrr;
-    UCSR0A = 0U;
+    UCSR0A = 0;
     UCSR0B = _BV(TXEN0) | _BV(RXEN0);
     UCSR0C = _BV(UCSZ01) | _BV(UCSZ00);
 }
 
 void uart_write_char(char value)
 {
-    while ((UCSR0A & _BV(UDRE0)) == 0U)
+    while ((UCSR0A & _BV(UDRE0)) == 0)
     {
     }
 
@@ -44,21 +46,21 @@ void uart_write_string_P(const char *text)
 void uart_write_uint16(uint16_t value)
 {
     char buffer[6];
-    uint8_t index = 0U;
+    uint8_t index = 0;
 
-    if (value == 0U)
+    if (value == 0)
     {
         uart_write_char('0');
         return;
     }
 
-    while (value > 0U && index < sizeof(buffer))
+    while (value > 0 && index < sizeof(buffer))
     {
-        buffer[index++] = (char)('0' + (value % 10U));
-        value /= 10U;
+        buffer[index++] = (char)('0' + (value % 10));
+        value /= 10;
     }
 
-    while (index > 0U)
+    while (index > 0)
     {
         index--;
         uart_write_char(buffer[index]);

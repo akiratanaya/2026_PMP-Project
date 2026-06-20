@@ -56,12 +56,12 @@ volatile uint8_t *board_pin(uint8_t pin)
 
 uint8_t board_bit(uint8_t pin)
 {
-    return (pin < BOARD_PIN_COUNT) ? bit_map[pin] : 0U;
+    return (pin < BOARD_PIN_COUNT) ? bit_map[pin] : 0;
 }
 
 uint8_t board_pwm_pin_valid(uint8_t pin)
 {
-    return (pin == 3U) || (pin == 5U) || (pin == 6U) || (pin == 9U) || (pin == 10U) || (pin == 11U);
+    return (pin == 3) || (pin == 5) || (pin == 6) || (pin == 9) || (pin == 10) || (pin == 11);
 }
 
 void board_init(void)
