@@ -1,9 +1,6 @@
 #include "arduino_pwm.h"
-
 #include <avr/io.h>
-
 #include "arduino_board.h"
-
 static void pwm_setup(uint8_t pin)
 {
     if (pin == 5 || pin == 6)
@@ -20,7 +17,6 @@ static void pwm_setup(uint8_t pin)
         }
         return;
     }
-
     if (pin == 9 || pin == 10)
     {
         TCCR1A |= _BV(WGM10);
@@ -35,7 +31,6 @@ static void pwm_setup(uint8_t pin)
         }
         return;
     }
-
     if (pin == 3 || pin == 11)
     {
         TCCR2A |= _BV(WGM20) | _BV(WGM21);
@@ -50,14 +45,12 @@ static void pwm_setup(uint8_t pin)
         }
     }
 }
-
 void pwm_write(uint8_t pin, uint8_t value)
 {
     if (!board_pwm_pin_valid(pin))
     {
         return;
     }
-
     if (pin == 5)
     {
         DDRD |= _BV(DDD5);
@@ -65,7 +58,6 @@ void pwm_write(uint8_t pin, uint8_t value)
         OCR0B = value;
         return;
     }
-
     if (pin == 6)
     {
         DDRD |= _BV(DDD6);
@@ -73,7 +65,6 @@ void pwm_write(uint8_t pin, uint8_t value)
         OCR0A = value;
         return;
     }
-
     if (pin == 9)
     {
         DDRB |= _BV(DDB1);
@@ -81,7 +72,6 @@ void pwm_write(uint8_t pin, uint8_t value)
         OCR1A = value;
         return;
     }
-
     if (pin == 10)
     {
         DDRB |= _BV(DDB2);
@@ -89,7 +79,6 @@ void pwm_write(uint8_t pin, uint8_t value)
         OCR1B = value;
         return;
     }
-
     if (pin == 3)
     {
         DDRD |= _BV(DDD3);
@@ -97,7 +86,6 @@ void pwm_write(uint8_t pin, uint8_t value)
         OCR2B = value;
         return;
     }
-
     DDRB |= _BV(DDB3);
     pwm_setup(pin);
     OCR2A = value;

@@ -136,14 +136,14 @@ static const dict_entry_t PROGMEM cat_dict[] =
 
 static const dict_entry_t PROGMEM loc_dict[] =
 {
-    /* Lantai / Ruang */
+
     { "L1",  "Lantai 1"          },
     { "L2",  "Lantai 2"          },
     { "R1",  "Ruang 1"           },
     { "R2",  "Ruang 2"           },
     { "R3",  "Ruang 3"           },
     { "R4",  "Ruang 4"           },
-    /* Area Khusus */
+
     { "G1",  "Gudang 1"          },
     { "G2",  "Gudang 2"          },
     { "SR",  "Server Room"       },
@@ -158,7 +158,7 @@ static const dict_entry_t PROGMEM loc_dict[] =
     { "RF",  "Rak F"             },
     { "PP",  "Pos Penjagaan"     },
     { "KL",  "Klinik"            },
-    /* Maping nama panjang yang sudah ada di EEPROM */
+
     { "A1",  "Cabinet A Row 1"   },
     { "A2",  "Cabinet A Row 2"   },
     { "B1",  "Cabinet B Row 1"   },
@@ -194,38 +194,28 @@ static const dict_entry_t PROGMEM pic_dict[] =
     { "SN",  "Seno"              },
 };
 
-/* -----------------------------------------------------------------------
- * Generic lookup: searches a PROGMEM table, copies full name to out.
- * Falls back to printing the raw code if no match is found.
- * ---------------------------------------------------------------------- */
 static void dict_lookup(const dict_entry_t *table,
                         uint8_t            table_len,
                         const char        *code,
                         char              *out)
 {
-    for (uint8_t i = 0; i < table_len; i++)
-    {
-        /* Read the code field from Flash into a temporary SRAM buffer */
+    for (uint8_t i = 0; i < table_len; i++){
         char key[DICT_CODE_SIZE];
         memcpy_P(key, table[i].code, DICT_CODE_SIZE);
 
         if (strncmp(key, code, DICT_CODE_SIZE) == 0)
         {
-            /* Match found: copy full name from Flash to output buffer */
             memcpy_P(out, table[i].full, DICT_FULL_SIZE);
             out[DICT_FULL_SIZE - 1] = '\0';
             return;
         }
     }
 
-    /* No match: fall back to raw code (safe, always null-terminated) */
     strncpy(out, code, DICT_FULL_SIZE - 1);
     out[DICT_FULL_SIZE - 1] = '\0';
 }
 
-/* -----------------------------------------------------------------------
- * Public API
- * ---------------------------------------------------------------------- */
+
 void dict_lookup_name(const char *code, char *out)
 {
     dict_lookup(name_dict,

@@ -1,34 +1,24 @@
 #include <avr/pgmspace.h>
 #include "inventory.h"
 #include "dict.h"
-
 #include <string.h>
 #include <stddef.h>
 #include <avr/io.h>
-
-
 extern char cmd_input_line[];
 extern char *cmd_param_str;
 extern char *cmd_tokens[];
 extern uint8_t cmd_token_count;
-
 #include "arduino_uart.h"
 #include "arduino_i2c.h"
 #include "arduino_time.h"
 #include <avr/eeprom.h>
-
 #include <stdint.h>
-
-// EEPROM layout
 #define EEPROM_MAGIC 0x494E5631UL 
 #define I2C_CHUNK_SIZE 16
-
-/* Multi-Slave registry (Master only) */
 #define SLAVE_BASE_ADDR 0x08
-#define SLAVE_MAX_ADDR  0x0F   /* supports up to 8 slaves: 0x08..0x0F */
+#define SLAVE_MAX_ADDR  0x0F   
 uint8_t slave_addrs[MAX_SLAVES];
 uint8_t num_slaves = 0;
-
 typedef struct __attribute__((packed))
 {
     uint32_t magic;
@@ -39,15 +29,11 @@ typedef struct __attribute__((packed))
     int16_t free_list_head;
     uint16_t crc;
 } eeprom_header_t;
-
-/* Global state (non-static so Slave can inspect it) */
 inventory_node_t node_pool[MAX_NODES];
 int16_t free_list_head = -1;
 int16_t list_head = -1;
 uint8_t node_count = 0;
 uint8_t last_op_status = 0;
-
-/* compute simple checksum (16-bit sum) - Refactored to void */
 static void checksum16(const void *data, size_t len, uint16_t *result)
 {
     const uint8_t *p = (const uint8_t *)data;
@@ -58,8 +44,6 @@ static void checksum16(const void *data, size_t len, uint16_t *result)
     }
     *result = (uint16_t)(sum & 0xFFFF);
 }
-
-/* Write block to specific slave address */
 static void i2c_write_block(uint8_t addr, uint16_t offset, const uint8_t *data, uint16_t length, uint8_t *result)
 {
     uint16_t pos = 0;
@@ -72,8 +56,6 @@ static void i2c_write_block(uint8_t addr, uint16_t offset, const uint8_t *data, 
         pos = (uint16_t)(pos + chunk);
     }
 }
-
-/* Read block from specific slave address */
 static void i2c_read_block(uint8_t addr, uint16_t offset, uint8_t *data, uint16_t length, uint8_t *result)
 {
     uint16_t pos = 0;
@@ -86,9 +68,7 @@ static void i2c_read_block(uint8_t addr, uint16_t offset, uint8_t *data, uint16_
         pos = (uint16_t)(pos + chunk);
     }
 }
-
 #ifdef ROLE_MASTER
-/* Scan I2C bus and populate slave_addrs[] */
 void scan_slaves(void)
 {
     uint8_t dummy;
@@ -102,12 +82,9 @@ void scan_slaves(void)
         }
     }
 }
-
-/* Send command to a specific slave address */
 static void send_slave_cmd(uint8_t slave_addr, uint8_t cmd, const char *param, uint8_t *status_out)
 {
     uint8_t i2c_status;
-
     if (param != NULL)
     {
         uint8_t len = (uint8_t)strlen(param);
@@ -115,16 +92,12 @@ static void send_slave_cmd(uint8_t slave_addr, uint8_t cmd, const char *param, u
         i2c_write_block(slave_addr, 2, (const uint8_t *)param, (uint16_t)(len + 1), &i2c_status);
         if (i2c_status != I2C_OK) { *status_out = 0xFF; return; }
     }
-
     uint8_t busy = 0xFF;
     i2c_status = i2c_master_mem_write(slave_addr, 1, &busy, 1);
     if (i2c_status != I2C_OK) { *status_out = 0xFF; return; }
-
     i2c_status = i2c_master_mem_write(slave_addr, 0, &cmd, 1);
     if (i2c_status != I2C_OK) { *status_out = 0xFF; return; }
-
     delay_ms(20);
-
     uint8_t slave_cmd = 0xFF;
     uint16_t timeout = 2000;
     while (timeout > 0)
@@ -135,12 +108,9 @@ static void send_slave_cmd(uint8_t slave_addr, uint8_t cmd, const char *param, u
         timeout--;
     }
     if (timeout == 0) { *status_out = 0xFE; return; }
-
     i2c_status = i2c_master_mem_read(slave_addr, 1, status_out, 1);
     if (i2c_status != I2C_OK) { *status_out = 0xFF; }
 }
-
-/* Set new I2C address on a slave (SETADDR command 0x09) */
 void set_slave_addr(uint8_t old_addr, uint8_t new_addr, uint8_t *result)
 {
     uint8_t payload = new_addr;
@@ -148,7 +118,6 @@ void set_slave_addr(uint8_t old_addr, uint8_t new_addr, uint8_t *result)
     send_slave_cmd(old_addr, 0x09, NULL, result);
     if (*result == 0x01)
     {
-        /* Update registry */
         for (uint8_t i = 0; i < num_slaves; i++)
         {
             if (slave_addrs[i] == old_addr)
@@ -163,7 +132,6 @@ void set_slave_addr(uint8_t old_addr, uint8_t new_addr, uint8_t *result)
 void scan_slaves(void) {}
 void set_slave_addr(uint8_t old_addr, uint8_t new_addr, uint8_t *result) { (void)old_addr; (void)new_addr; *result = 0; }
 #endif
-
 void inventory_init(void)
 {
     for (int16_t i = 0; i < MAX_NODES; ++i)
@@ -175,7 +143,6 @@ void inventory_init(void)
     list_head = -1;
     node_count = 0;
 }
-
 void inventory_clear(void)
 {
     memset(node_pool, 0, sizeof(node_pool));
@@ -188,7 +155,6 @@ void inventory_clear(void)
     list_head = -1;
     node_count = 0;
     inventory_save_eeprom();
-    
 #ifdef ROLE_MASTER
     uart_write_string_P(PSTR("CLEAR: Master memory wiped\r\n"));
     for (uint8_t s = 0; s < num_slaves; s++)
@@ -202,8 +168,6 @@ void inventory_clear(void)
     }
 #endif
 }
-
-/* Allocate node helper - Refactored to void */
 static void alloc_node(int16_t *result)
 {
     if (free_list_head == -1)
@@ -217,15 +181,12 @@ static void alloc_node(int16_t *result)
     node_count++;
     *result = idx;
 }
-
 static void free_node(int16_t idx)
 {
     node_pool[idx].next = free_list_head;
     free_list_head = idx;
     if (node_count > 0) node_count--;
 }
-
-/* Helper: find index by ID, returns -1 if not found */
 void find_index_by_id(const char *id, int16_t *result)
 {
     int16_t cur = list_head;
@@ -240,10 +201,8 @@ void find_index_by_id(const char *id, int16_t *result)
     }
     *result = -1;
 }
-
 void inventory_add(void)
 {
-    /* Expected param string: id,name,category,stock,location,status,owner,pic */
     if (cmd_param_str == NULL)
     {
 #ifdef ROLE_MASTER
@@ -252,11 +211,9 @@ void inventory_add(void)
         last_op_status = 0x04;
         return;
     }
-
     char tmp[128];
     strncpy(tmp, cmd_param_str, sizeof(tmp) - 1);
     tmp[sizeof(tmp) - 1] = '\0';
-
     char *fields[8] = {0};
     uint8_t f = 0;
     char *p = tmp;
@@ -271,7 +228,6 @@ void inventory_add(void)
         if (comma == NULL) break;
         p = comma + 1;
     }
-
     if (f < 8)
     {
 #ifdef ROLE_MASTER
@@ -280,8 +236,6 @@ void inventory_add(void)
         last_op_status = 0x04;
         return;
     }
-
-    /* check duplicate ID locally */
     int16_t dup_idx;
     find_index_by_id(fields[0], &dup_idx);
     if (dup_idx != -1)
@@ -292,9 +246,7 @@ void inventory_add(void)
         last_op_status = 0x02;
         return;
     }
-
 #ifdef ROLE_MASTER
-    /* Check duplicate ID across ALL slaves */
     {
         uint8_t slave_status;
         for (uint8_t s = 0; s < num_slaves; s++)
@@ -309,8 +261,6 @@ void inventory_add(void)
         }
     }
 #endif
-
-    /* Check free space and add */
     if (free_list_head != -1)
     {
         int16_t idx;
@@ -324,7 +274,6 @@ void inventory_add(void)
             return;
         }
         memset(&node_pool[idx], 0, sizeof(inventory_node_t));
-
         strncpy(node_pool[idx].id, fields[0], ID_SIZE - 1);
         node_pool[idx].id[ID_SIZE - 1] = '\0';
         strncpy(node_pool[idx].name, fields[1], NAME_SIZE - 1);
@@ -342,7 +291,6 @@ void inventory_add(void)
         node_pool[idx].stock = (uint8_t)(parsed_stock > 255 ? 255 : parsed_stock);
         strncpy(node_pool[idx].location, fields[4], LOC_SIZE - 1);
         node_pool[idx].location[LOC_SIZE - 1] = '\0';
-        
         uint8_t status = 0;
         if (strncmp(fields[5], "available", 9) == 0) status = 0;
         else if (strncmp(fields[5], "borrowed", 8) == 0) status = 1;
@@ -353,11 +301,9 @@ void inventory_add(void)
         node_pool[idx].owner[OWNER_SIZE - 1] = '\0';
         strncpy(node_pool[idx].pic, fields[7], PIC_SIZE - 1);
         node_pool[idx].pic[PIC_SIZE - 1] = '\0';
-
         node_pool[idx].next = list_head;
         list_head = idx;
-
-        last_op_status = 0x01; // SUCCESS
+        last_op_status = 0x01; 
 #ifdef ROLE_MASTER
         if (node_count >= MAX_NODES - 2)
         {
@@ -373,7 +319,6 @@ void inventory_add(void)
     else
     {
 #ifdef ROLE_MASTER
-        /* Master is full — cascade to first Slave with space */
         uart_write_string_P(PSTR("ADD: Master full. Forwarding to Slave...\r\n"));
         uint8_t slave_status = 0;
         uint8_t forwarded = 0;
@@ -388,7 +333,6 @@ void inventory_add(void)
                 forwarded = 1;
                 break;
             }
-            /* 0x03 = full, try next slave */
         }
         if (!forwarded)
         {
@@ -396,11 +340,10 @@ void inventory_add(void)
             last_op_status = 0x03;
         }
 #else
-        last_op_status = 0x03; // Full on Slave
+        last_op_status = 0x03; 
 #endif
     }
 }
-
 void inventory_delete(void)
 {
     if (cmd_param_str == NULL)
@@ -411,7 +354,6 @@ void inventory_delete(void)
         last_op_status = 0x02;
         return;
     }
-
     int16_t prev = -1;
     int16_t cur = list_head;
     while (cur != -1)
@@ -423,7 +365,6 @@ void inventory_delete(void)
         prev = cur;
         cur = node_pool[cur].next;
     }
-
     if (cur != -1)
     {
         if (prev == -1)
@@ -434,7 +375,6 @@ void inventory_delete(void)
         {
             node_pool[prev].next = node_pool[cur].next;
         }
-
         free_node(cur);
         last_op_status = 0x01;
 #ifdef ROLE_MASTER
@@ -445,7 +385,6 @@ void inventory_delete(void)
     else
     {
 #ifdef ROLE_MASTER
-        /* Try deleting on each slave in order */
         uint8_t slave_status;
         uint8_t deleted = 0;
         for (uint8_t s = 0; s < num_slaves; s++)
@@ -469,7 +408,6 @@ void inventory_delete(void)
 #endif
     }
 }
-
 #ifdef ROLE_MASTER
 static void print_find_row(const char *label_P, const char *val, uint8_t val_width)
 {
@@ -482,27 +420,20 @@ static void print_find_row(const char *label_P, const char *val, uint8_t val_wid
     while (l < val_width) { uart_write_char(' '); l++; }
     uart_write_string_P(PSTR(" |\r\n"));
 }
-
 static void print_find_result(const inventory_node_t *node, const char *src)
 {
     char buf[DICT_FULL_SIZE];
-
     uart_write_string_P(PSTR("+----------+----------------------+\r\n"));
     uart_write_string_P(PSTR("| FIND     | "));
     uint8_t l = 0;
     while (src[l] != '\0' && l < 20) { uart_write_char(src[l]); l++; }
     while (l < 20) { uart_write_char(' '); l++; }
     uart_write_string_P(PSTR(" |\r\n+----------+----------------------+\r\n"));
-
     print_find_row(PSTR("| ID       | "), node->id, 20);
-
     dict_lookup_name(node->name, buf);
     print_find_row(PSTR("| Name     | "), buf, 20);
-
     dict_lookup_cat(node->category, buf);
     print_find_row(PSTR("| Category | "), buf, 20);
-
-    /* Stock — right-aligned */
     uart_write_string_P(PSTR("| Stock    | "));
     {
         char sbuf[6]; uint8_t idx = 0; uint16_t v = node->stock;
@@ -513,11 +444,8 @@ static void print_find_result(const inventory_node_t *node, const char *src)
         while (idx > 0) { idx--; uart_write_char(sbuf[idx]); }
     }
     uart_write_string_P(PSTR(" |\r\n"));
-
     dict_lookup_loc(node->location, buf);
     print_find_row(PSTR("| Location | "), buf, 20);
-
-    /* Status from PROGMEM */
     uart_write_string_P(PSTR("| Status   | "));
     {
         const char *st;
@@ -530,16 +458,13 @@ static void print_find_result(const inventory_node_t *node, const char *src)
         while (sl < 20) { uart_write_char(' '); sl++; }
     }
     uart_write_string_P(PSTR(" |\r\n"));
-
     dict_lookup_owner(node->owner, buf);
     print_find_row(PSTR("| Owner    | "), buf, 20);
-
     dict_lookup_pic(node->pic, buf);
     print_find_row(PSTR("| PIC      | "), buf, 20);
     uart_write_string_P(PSTR("+----------+----------------------+\r\n"));
 }
 #endif
-
 void inventory_find(void)
 {
     if (cmd_param_str == NULL)
@@ -550,7 +475,6 @@ void inventory_find(void)
         last_op_status = 0x02;
         return;
     }
-
     int16_t idx;
     find_index_by_id(cmd_param_str, &idx);
     if (idx != -1)
@@ -596,7 +520,6 @@ void inventory_find(void)
 #endif
     }
 }
-
 void inventory_update_stock(void)
 {
     if (cmd_param_str == NULL)
@@ -607,7 +530,6 @@ void inventory_update_stock(void)
         last_op_status = 0x02;
         return;
     }
-
     char tmp[64];
     strncpy(tmp, cmd_param_str, sizeof(tmp) - 1);
     tmp[sizeof(tmp) - 1] = '\0';
@@ -623,12 +545,10 @@ void inventory_update_stock(void)
     *comma = '\0';
     char *id = tmp;
     char *num = comma + 1;
-
     int16_t idx;
     find_index_by_id(id, &idx);
     if (idx != -1)
     {
-        /* parse number signed */
         int32_t val = 0;
         uint8_t sign = 0;
         char *q = num;
@@ -643,7 +563,6 @@ void inventory_update_stock(void)
             q++;
         }
         if (sign) val = -val;
-
         if (val < 0 && (uint16_t)(-val) > node_pool[idx].stock)
         {
 #ifdef ROLE_MASTER
@@ -652,7 +571,6 @@ void inventory_update_stock(void)
             last_op_status = 0x03;
             return;
         }
-
         int32_t newstock = (int32_t)node_pool[idx].stock + val;
         if (newstock < 0) newstock = 0;
         node_pool[idx].stock = (uint8_t)(newstock > 255 ? 255 : newstock);
@@ -695,7 +613,6 @@ void inventory_update_stock(void)
 #endif
     }
 }
-
 void inventory_update_status(void)
 {
     if (cmd_param_str == NULL)
@@ -706,7 +623,6 @@ void inventory_update_status(void)
         last_op_status = 0x02;
         return;
     }
-
     char tmp[64];
     strncpy(tmp, cmd_param_str, sizeof(tmp) - 1);
     tmp[sizeof(tmp) - 1] = '\0';
@@ -722,7 +638,6 @@ void inventory_update_status(void)
     *comma = '\0';
     char *id = tmp;
     char *st = comma + 1;
-
     int16_t idx;
     find_index_by_id(id, &idx);
     if (idx != -1)
@@ -739,7 +654,6 @@ void inventory_update_status(void)
             last_op_status = 0x03;
             return;
         }
-
         last_op_status = 0x01;
 #ifdef ROLE_MASTER
         uart_write_string_P(PSTR("STATUS: OK\r\n"));
@@ -779,7 +693,6 @@ void inventory_update_status(void)
 #endif
     }
 }
-
 #ifdef ROLE_MASTER
 static void uart_write_padded(const char *s, uint8_t width)
 {
@@ -795,7 +708,6 @@ static void uart_write_padded(const char *s, uint8_t width)
         len++;
     }
 }
-
 static void uart_write_padded_uint16(uint16_t val, uint8_t width)
 {
     char buffer[6];
@@ -823,37 +735,23 @@ static void uart_write_padded_uint16(uint16_t val, uint8_t width)
         uart_write_char(buffer[index]);
     }
 }
-
 static void print_node_row(const inventory_node_t *node, const char *source_sram, const char *source_progmem)
 {
-    /* Temporary buffer in SRAM — only alive during this print call */
     char buf[DICT_FULL_SIZE];
     char c;
-
-    /* ID (raw code, no expansion needed) */
     uart_write_string_P(PSTR("| "));
     uart_write_padded(node->id, 3);
-
-    /* Name — expand code to full name via Flash dictionary */
     uart_write_string_P(PSTR(" | "));
     dict_lookup_name(node->name, buf);
     uart_write_padded(buf, 15);
-
-    /* Category — expand via Flash dictionary */
     uart_write_string_P(PSTR(" | "));
     dict_lookup_cat(node->category, buf);
     uart_write_padded(buf, 13);
-
-    /* Stock (numeric, no expansion) */
     uart_write_string_P(PSTR(" | "));
     uart_write_padded_uint16(node->stock, 5);
-
-    /* Location — expand via Flash dictionary */
     uart_write_string_P(PSTR(" | "));
     dict_lookup_loc(node->location, buf);
     uart_write_padded(buf, 15);
-
-    /* Status (PROGMEM string, no dictionary needed) */
     uart_write_string_P(PSTR(" | "));
     const char *status_str;
     if      (node->status == 0) status_str = PSTR("available");
@@ -867,18 +765,12 @@ static void print_node_row(const inventory_node_t *node, const char *source_sram
         len++;
     }
     while (len < 9) { uart_write_char(' '); len++; }
-
-    /* Owner — expand via Flash dictionary */
     uart_write_string_P(PSTR(" | "));
     dict_lookup_owner(node->owner, buf);
     uart_write_padded(buf, 16);
-
-    /* PIC — expand via Flash dictionary */
     uart_write_string_P(PSTR(" | "));
     dict_lookup_pic(node->pic, buf);
     uart_write_padded(buf, 12);
-
-    /* Source column */
     uart_write_string_P(PSTR(" | "));
     if (source_progmem != NULL)
     {
@@ -896,36 +788,30 @@ static void print_node_row(const inventory_node_t *node, const char *source_sram
     }
     uart_write_string_P(PSTR(" |\r\n"));
 }
-
 static void print_table_header(void)
 {
     uart_write_string_P(PSTR("+-----+-----------------+---------------+-------+-----------------+-----------+------------------+--------------+--------+\r\n"));
     uart_write_string_P(PSTR("| ID  | Name            | Category      | Stock | Location        | Status    | Owner            | PIC          | Source |\r\n"));
     uart_write_string_P(PSTR("+-----+-----------------+---------------+-------+-----------------+-----------+------------------+--------------+--------+\r\n"));
 }
-
 static void print_table_footer(void)
 {
     uart_write_string_P(PSTR("+-----+-----------------+---------------+-------+-----------------+-----------+------------------+--------------+--------+\r\n"));
 }
 #endif
-
 void inventory_list(void)
 {
     int16_t cur = list_head;
+    
 #ifdef ROLE_MASTER
     uint16_t total_printed = 0;
-    
     print_table_header();
-    
     while (cur != -1)
     {
         print_node_row(&node_pool[cur], NULL, PSTR("Master"));
         cur = node_pool[cur].next;
         total_printed++;
     }
-
-    /* List all slaves in order */
     for (uint8_t s = 0; s < num_slaves; s++)
     {
         uint8_t list_idx = 0;
@@ -935,11 +821,9 @@ void inventory_list(void)
             param[0] = (char)('0' + (list_idx / 10));
             param[1] = (char)('0' + (list_idx % 10));
             param[2] = '\0';
-
             uint8_t slave_status;
             send_slave_cmd(slave_addrs[s], 0x06, param, &slave_status);
             if (slave_status != 0x01) break;
-
             inventory_node_t node;
             uint8_t i2c_st;
             i2c_read_block(slave_addrs[s], 2, (uint8_t *)&node, sizeof(inventory_node_t), &i2c_st);
@@ -953,16 +837,13 @@ void inventory_list(void)
                 src_str[4] = 'e';
                 src_str[5] = (char)('0' + s);
                 src_str[6] = '\0';
-                
                 print_node_row(&node, src_str, NULL);
                 total_printed++;
             }
             list_idx++;
         }
     }
-    
     print_table_footer();
-    
     if (total_printed == 0)
     {
         uart_write_string_P(PSTR("No items found in database.\r\n"));
@@ -977,25 +858,19 @@ void inventory_list(void)
     while (cur != -1) { cur = node_pool[cur].next; }
 #endif
 }
-
 void inventory_summary(void)
 {
 #ifdef ROLE_MASTER
     uint16_t total_nodes    = node_count;
     uint16_t total_capacity = (uint16_t)MAX_NODES;
-
     uart_write_string_P(PSTR("+--------+------+------+\r\n"));
     uart_write_string_P(PSTR("| Source | Used |  Cap |\r\n"));
     uart_write_string_P(PSTR("+--------+------+------+\r\n"));
-
-    /* Master row */
     uart_write_string_P(PSTR("| Master | "));
     uart_write_padded_uint16(node_count, 4);
     uart_write_string_P(PSTR(" | "));
     uart_write_padded_uint16((uint16_t)MAX_NODES, 4);
     uart_write_string_P(PSTR(" |\r\n"));
-
-    /* Slave rows */
     for (uint8_t s = 0; s < num_slaves; s++)
     {
         uint8_t slave_status;
@@ -1020,7 +895,6 @@ void inventory_summary(void)
             uart_write_string_P(PSTR("OFFL | OFFL |\r\n"));
         }
     }
-
     uart_write_string_P(PSTR("+--------+------+------+\r\n"));
     uart_write_string_P(PSTR("| TOTAL  | "));
     uart_write_padded_uint16(total_nodes, 4);
@@ -1028,27 +902,22 @@ void inventory_summary(void)
     uart_write_padded_uint16(total_capacity, 4);
     uart_write_string_P(PSTR(" |\r\n"));
     uart_write_string_P(PSTR("+--------+------+------+\r\n"));
-
     if (num_slaves == 0)
         uart_write_string_P(PSTR("(No slave nodes)\r\n"));
 #endif
 }
-
 #ifdef ROLE_MASTER
 static void print_raw_csv_row(const inventory_node_t *node)
 {
     uart_write_string(node->id); uart_write_char(',');
     uart_write_string(node->name); uart_write_char(',');
     uart_write_string(node->category); uart_write_char(',');
-    
     char sbuf[6]; uint8_t idx = 0; uint16_t v = node->stock;
     if (v == 0) { sbuf[idx++] = '0'; }
     else { while (v > 0 && idx < 6) { sbuf[idx++] = (char)('0' + (v % 10)); v /= 10; } }
     while (idx > 0) { idx--; uart_write_char(sbuf[idx]); }
-    
     uart_write_char(',');
     uart_write_string(node->location); uart_write_char(',');
-    
     const char *st;
     if      (node->status == 0) st = PSTR("available");
     else if (node->status == 1) st = PSTR("borrowed");
@@ -1056,13 +925,11 @@ static void print_raw_csv_row(const inventory_node_t *node)
     else                        st = PSTR("empty");
     uint8_t sl = 0; char c;
     while ((c = (char)pgm_read_byte(st + sl)) != '\0') { uart_write_char(c); sl++; }
-    
     uart_write_char(',');
     uart_write_string(node->owner); uart_write_char(',');
     uart_write_string(node->pic); uart_write_newline();
 }
 #endif
-
 void inventory_export(void)
 {
 #ifdef ROLE_MASTER
@@ -1072,7 +939,6 @@ void inventory_export(void)
         print_raw_csv_row(&node_pool[cur]);
         cur = node_pool[cur].next;
     }
-    
     for (uint8_t s = 0; s < num_slaves; s++)
     {
         uint8_t list_idx = 0;
@@ -1082,11 +948,9 @@ void inventory_export(void)
             param[0] = (char)('0' + (list_idx / 10));
             param[1] = (char)('0' + (list_idx % 10));
             param[2] = '\0';
-            
             uint8_t slave_status;
             send_slave_cmd(slave_addrs[s], 0x06, param, &slave_status);
             if (slave_status != 0x01) break;
-            
             inventory_node_t node;
             uint8_t i2c_st;
             i2c_read_block(slave_addrs[s], 2, (uint8_t *)&node, sizeof(inventory_node_t), &i2c_st);
@@ -1099,7 +963,6 @@ void inventory_export(void)
     uart_write_string_P(PSTR("EXPORT_DONE\r\n"));
 #endif
 }
-
 void inventory_save_eeprom(void)
 {
     eeprom_header_t hdr;
@@ -1110,21 +973,17 @@ void inventory_save_eeprom(void)
     hdr.list_head = list_head;
     hdr.free_list_head = free_list_head;
     hdr.crc = 0;
-
     uint16_t crc_nodes;
     checksum16(node_pool, sizeof(node_pool), &crc_nodes);
     uint16_t crc_hdr;
     checksum16(&hdr, offsetof(eeprom_header_t, crc), &crc_hdr);
     hdr.crc = (uint16_t)((crc_nodes + crc_hdr) & 0xFFFF);
-
-    /* Write local EEPROM */
     eeprom_update_block((const void *)&hdr, (void *)0, sizeof(eeprom_header_t));
     eeprom_update_block((const void *)node_pool, (void *)(sizeof(eeprom_header_t)), sizeof(node_pool));
 #ifdef ROLE_MASTER
     uart_write_string_P(PSTR("SAVE: source=MASTER(EEPROM) OK\r\n"));
 #endif
 }
-
 void inventory_load_eeprom(void)
 {
     eeprom_header_t hdr;
@@ -1143,10 +1002,7 @@ void inventory_load_eeprom(void)
 #endif
         return;
     }
-
-    /* read nodes */
     eeprom_read_block((void *)node_pool, (const void *)(sizeof(eeprom_header_t)), sizeof(node_pool));
-
     uint16_t crc_nodes;
     checksum16(node_pool, sizeof(node_pool), &crc_nodes);
     uint16_t crc_hdr;
@@ -1159,7 +1015,6 @@ void inventory_load_eeprom(void)
 #endif
         return;
     }
-
     node_count = hdr.node_count;
     list_head = hdr.list_head;
     free_list_head = hdr.free_list_head;

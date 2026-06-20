@@ -7,11 +7,8 @@
 #include "arduino_i2c.h"
 #include <avr/io.h>
 #include <string.h>
-
 #define I2C_REMOTE_SLAVE_ADDRESS 0x08
 #define I2C_REMOTE_MAX_TRANSFER 16
-
-/* Case insensitive string compare - Refactored to void */
 static void str_eq_ci(const char *a, const char *b, uint8_t *result)
 {
     *result = 0;
@@ -30,35 +27,28 @@ static void str_eq_ci(const char *a, const char *b, uint8_t *result)
     }
     *result = ((*a == '\0') && (*b == '\0')) ? 1 : 0;
 }
-
-/* Parse uint16 - Refactored to void */
 static void parse_uint16_value(const char *text, uint16_t *value, uint8_t *result)
 {
     uint32_t tmp = 0;
     *result = 0;
-
     if ((text == 0) || (value == 0))
     {
         return;
     }
-
     while (*text == ' ')
     {
         text++;
     }
-
     if (*text == '\0')
     {
         return;
     }
-
     while (*text != '\0')
     {
         if ((*text < '0') || (*text > '9'))
         {
             return;
         }
-
         tmp = (tmp * 10UL) + (uint32_t)(*text - '0');
         if (tmp > 65535UL)
         {
@@ -66,64 +56,50 @@ static void parse_uint16_value(const char *text, uint16_t *value, uint8_t *resul
         }
         text++;
     }
-
     *value = (uint16_t)tmp;
     *result = 1;
 }
-
-/* Parse uint8 list - Refactored to void */
 static void parse_uint8_list(char *text, uint8_t *values, uint8_t max_values, uint8_t *count, uint8_t *result)
 {
     uint8_t parsed = 0;
     *result = 0;
-
     if ((text == 0) || (values == 0) || (count == 0))
     {
         return;
     }
-
     while ((text != 0) && (*text != '\0') && (parsed < max_values))
     {
         char *comma;
         uint16_t number = 0;
-
         while (*text == ' ')
         {
             text++;
         }
-
         comma = strchr(text, ',');
         if (comma != 0)
         {
             *comma = '\0';
         }
-
         uint8_t parse_ok;
         parse_uint16_value(text, &number, &parse_ok);
         if (!parse_ok || (number > 255))
         {
             return;
         }
-
         values[parsed++] = (uint8_t)number;
-
         if (comma == 0)
         {
             break;
         }
-
         text = comma + 1;
     }
-
     *count = parsed;
     *result = (parsed > 0) ? 1 : 0;
 }
-
 char cmd_input_line[64];
 char *cmd_param_str = NULL;
 char *cmd_tokens[1];
 uint8_t cmd_token_count = 0;
-
 static void cmd_reset(void)
 {
     memset(cmd_input_line, 0, sizeof(cmd_input_line));
@@ -131,7 +107,6 @@ static void cmd_reset(void)
     cmd_token_count = 0;
     cmd_tokens[0] = NULL;
 }
-
 void system_init(void)
 {
     board_init();
@@ -144,14 +119,11 @@ void system_init(void)
     cmd_reset();
     uart_write_string_P(PSTR("System ready\r\n"));
 }
-
-/* UART read line - Refactored to void with global result */
 static uint8_t uart_read_line_result = 0;
 static void uart_read_line(void)
 {
     static uint8_t pos = 0;
     uart_read_line_result = 0;
-    /* check RX complete */
     if ((UCSR0A & _BV(RXC0)) == 0) return;
     char c = (char)UDR0;
     if (c == '\r') return;
@@ -167,17 +139,14 @@ static void uart_read_line(void)
         cmd_input_line[pos++] = c;
     }
 }
-
 static void parse_command(void)
 {
     cmd_param_str = NULL;
     cmd_token_count = 0;
     cmd_tokens[0] = NULL;
-
     char *p = cmd_input_line;
     while (*p == ' ') p++;
     if (*p == '\0') return;
-    /* first token */
     cmd_tokens[0] = p;
     cmd_token_count = 1;
     while (*p != ' ' && *p != '\0') p++;
@@ -192,13 +161,11 @@ static void parse_command(void)
         }
     }
 }
-
 static void dispatch_command(void)
 {
     if (cmd_tokens[0] == NULL) return;
     char *cmd = cmd_tokens[0];
     uint8_t eq1, eq2;
-
     str_eq_ci(cmd, "ADD", &eq1); str_eq_ci(cmd, "A", &eq2);
     if (eq1 || eq2)
     {
@@ -268,7 +235,6 @@ static void dispatch_command(void)
     }
     else if (str_eq_ci(cmd, "SADDR", &eq1), (eq1 != 0))
     {
-        /* SADDR old_hex,new_hex  e.g. SADDR 8,9 */
         if (cmd_param_str == NULL)
         {
             uart_write_string_P(PSTR("SADDR: expected old,new\r\n"));
@@ -317,16 +283,13 @@ static void dispatch_command(void)
         uint8_t value_count = 0;
         uint8_t i2c_status = I2C_ERROR;
         uint16_t offset = 0;
-
         if (cmd_param_str == 0)
         {
             uart_write_string_P(PSTR("IWRITE: missing params\r\n"));
             return;
         }
-
         strncpy(tmp, cmd_param_str, sizeof(tmp) - 1);
         tmp[sizeof(tmp) - 1] = '\0';
-
         char *comma = strchr(tmp, ',');
         if (comma == 0)
         {
@@ -334,7 +297,6 @@ static void dispatch_command(void)
             return;
         }
         *comma = '\0';
-        
         uint8_t parse_ok;
         parse_uint16_value(tmp, &offset, &parse_ok);
         if (!parse_ok)
@@ -342,14 +304,12 @@ static void dispatch_command(void)
             uart_write_string_P(PSTR("IWRITE: invalid offset\r\n"));
             return;
         }
-
         parse_uint8_list(comma + 1, values, I2C_REMOTE_MAX_TRANSFER, &value_count, &parse_ok);
         if (!parse_ok)
         {
             uart_write_string_P(PSTR("IWRITE: invalid data\r\n"));
             return;
         }
-
         i2c_status = i2c_master_mem_write(I2C_REMOTE_SLAVE_ADDRESS, offset, values, value_count);
         if (i2c_status == I2C_OK)
         {
@@ -370,16 +330,13 @@ static void dispatch_command(void)
         uint16_t offset = 0;
         uint16_t length = 0;
         uint8_t i;
-
         if (cmd_param_str == 0)
         {
             uart_write_string_P(PSTR("IREAD: missing params\r\n"));
             return;
         }
-
         strncpy(tmp, cmd_param_str, sizeof(tmp) - 1);
         tmp[sizeof(tmp) - 1] = '\0';
-
         char *comma = strchr(tmp, ',');
         if (comma == 0)
         {
@@ -387,7 +344,6 @@ static void dispatch_command(void)
             return;
         }
         *comma = '\0';
-
         uint8_t parse_ok;
         parse_uint16_value(tmp, &offset, &parse_ok);
         if (!parse_ok)
@@ -395,14 +351,12 @@ static void dispatch_command(void)
             uart_write_string_P(PSTR("IREAD: invalid offset\r\n"));
             return;
         }
-
         parse_uint16_value(comma + 1, &length, &parse_ok);
         if (!parse_ok || (length == 0) || (length > I2C_REMOTE_MAX_TRANSFER))
         {
             uart_write_string_P(PSTR("IREAD: invalid length\r\n"));
             return;
         }
-
         i2c_status = i2c_master_mem_read(I2C_REMOTE_SLAVE_ADDRESS, offset, values, (uint8_t)length);
         if (i2c_status != I2C_OK)
         {
@@ -411,7 +365,6 @@ static void dispatch_command(void)
             uart_write_newline();
             return;
         }
-
         uart_write_string_P(PSTR("IREAD: "));
         for (i = 0; i < (uint8_t)length; ++i)
         {
@@ -436,7 +389,6 @@ static void dispatch_command(void)
         }
     }
 }
-
 void system_loop(void)
 {
     uart_read_line();

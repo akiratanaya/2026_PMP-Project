@@ -1,5 +1,4 @@
 #include "../library/src/serial_cmd.h"
-
 int main(void)
 {
     system_init();
@@ -8,5 +7,4 @@ int main(void)
         system_loop();
     }
     return 0;
-    
 }
